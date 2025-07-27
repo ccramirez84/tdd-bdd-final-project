@@ -24,6 +24,8 @@ For information on Waiting until elements are present in the HTML see:
 """
 import requests
 from behave import given
+from compare import expect # Importa expect para las aserciones BDD
+from service.models import Category # Importa Category para manejar el Enum
 
 # HTTP Return Codes
 HTTP_200_OK = 200
@@ -38,15 +40,30 @@ def step_impl(context):
     #
     rest_endpoint = f"{context.base_url}/products"
     context.resp = requests.get(rest_endpoint)
-    assert(context.resp.status_code == HTTP_200_OK)
+    expect(context.resp.status_code).to_equal(HTTP_200_OK) # Asegura que la solicitud GET fue exitosa
+
     for product in context.resp.json():
         context.resp = requests.delete(f"{rest_endpoint}/{product['id']}")
-        assert(context.resp.status_code == HTTP_204_NO_CONTENT)
+        expect(context.resp.status_code).to_equal(HTTP_204_NO_CONTENT) # Asegura que la eliminación fue exitosa
 
     #
     # load the database with new products
     #
     for row in context.table:
-        #
-        # ADD YOUR CODE HERE TO CREATE PRODUCTS VIA THE REST API
-        #
+        product_data = {
+            "name": row['name'],
+            "description": row['description'],
+            "price": float(row['price']), # Convertir a float para JSON, luego a Decimal en el modelo
+            "available": row['available'].lower() == 'true', # Convertir a booleano
+            "category": row['category'].upper() # Convertir a mayúsculas para el Enum
+        }
+        
+        # Crear el producto a través de la API REST
+        context.resp = requests.post(rest_endpoint, json=product_data)
+        expect(context.resp.status_code).to_equal(HTTP_201_CREATED) # Asegura que la creación fue exitosa
+        
+        # Opcional: Almacenar los productos creados en el contexto para futuras aserciones
+        if 'products' not in context:
+            context.products = []
+        context.products.append(context.resp.json())
+
